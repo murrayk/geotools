@@ -46,6 +46,8 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opengis.feature.simple.SimpleFeature;
 
+import javax.imageio.ImageIO;
+
 public class DrawTest {
     private static final Logger LOGGER = Logging.getLogger(DrawTest.class);
     private static final long TIME = 4000;
@@ -165,6 +167,59 @@ public class DrawTest {
                 image,
                 1000);
     }
+
+    @Test
+    public void testLineJoinMiter() throws Exception {
+        /**
+         * The current geotools miter-limit of 1 seems a bit low.
+         * It will automatically bevel line-join even with 90 degree angle
+         * Java2d default is 10 which is according to doc BasicStroke is
+         * default miterlimit value of 10.0f causes all angles less than
+         * 11 degrees to be trimmed.
+         * This java default might have caused issues with 'spiky lines at some point' but 1 seems very conservative.
+         * Trimming miters converts
+         * the decoration of the line join to bevel.
+         * Can we allow mitering of angles of 70 degrees and above?
+         * https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-miterlimit
+         * stroke-miterlimit =  miterLength/stroke-width =  1 /sin ( θ/2 )
+         *
+         * 1/sin((pi()/180 * 70)/2) = ~1.74
+         *
+         */
+
+        File property = new File(TestData.getResource(this, "lineJoins.properties").toURI());
+        PropertyDataStore ds = new PropertyDataStore(property.getParentFile());
+        SimpleFeatureSource myTest = ds.getFeatureSource("lineJoins");
+        Style miterStyle = RendererBaseTest.loadStyle(this, "lineGrayMiter.sld");
+
+        MapContent mc = new MapContent();
+        mc.addLayer(new FeatureLayer(myTest, miterStyle));
+
+        StreamingRenderer renderer = new StreamingRenderer();
+        renderer.setMapContent(mc);
+        renderer.setRendererHints(
+                Collections.singletonMap(StreamingRenderer.VECTOR_RENDERING_KEY, true));
+        renderer.setJava2DHints(new RenderingHints(KEY_ANTIALIASING, VALUE_ANTIALIAS_ON));
+        ReferencedEnvelope myTestBounds = myTest.getBounds();
+        myTestBounds.expandBy(2);
+        BufferedImage image =
+                RendererBaseTest.showRender("lineJoinMiter", renderer, TIME, new ReferencedEnvelope[]{myTestBounds}, listener);
+        try {
+            // retrieve image
+            BufferedImage bi = image;
+            File outputfile = new File("/home/kingmur/lineJoinMiter.png");
+            ImageIO.write(bi, "png", outputfile);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        ImageAssert.assertEquals(
+                new File(
+                        "./src/test/resources/org/geotools/renderer/lite/test-data/lineJoinMiter.png"),
+                image,
+                1000);
+    }
+
 
     @Test
     public void testPoint() throws Exception {
